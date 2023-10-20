@@ -35,22 +35,29 @@ class Bull():
         self.t = 0.0
         self.radius = radius
         self.W = weigth * 9.8
-        self.ax = wind/(weigth if weigth!=0 else 0.0001) -9.8# resistencia/m = aceleración
+        self.ax = wind*weigth #wind/(weigth if weigth!=0 else 0.0001) - 9.8 # resistencia/m = aceleración
         self.band=1
+        self.weigth = weigth
 
-    def show(self, screen,limit):
+    def show(self, screen,limit,wind):
+        self.ax = wind*self.weigth #wind/(self.weigth if self.weigth!=0 else 0.0001) - 9.8 # resistencia/m = aceleración
         if self.y+self.radius<limit:
-            self.y = self.y - self.vy*self.t + 0.5*self.W*self.t**2
+        	self.y = self.y - self.vy*self.t + 0.5*self.W*self.t**2
         else:
             if self.band:
                 self.vx = 0
                 self.band = 0
                 self.t=0
             else:
-                self.vx += 0.01 #self.vx + self.ax*self.t
-        
+                if self.weigth*0.3*9.8 < abs(self.ax):
+                    self.vx = self.vx + self.ax*self.t
+                    self.t += 0.1
+                else:
+                    self.t += 0.0
+
         self.x = self.x + self.vx*self.t + 0.5*self.ax*self.t**2
-        self.t += 0.1
+        if self.band:
+            self.t += 0.1
         pygame.draw.circle(screen, "blue", [self.x, self.y], self.radius)
 
 
@@ -162,7 +169,7 @@ while done:
     aux = []
     for i in range(len(bulls)):
         if bulls[i].x > 0:
-            bulls[i].show(screen,floor_limit-radius)
+            bulls[i].show(screen,floor_limit-radius,wind)
             aux.append(bulls[i])
     bulls = aux.copy()
 
