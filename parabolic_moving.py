@@ -18,42 +18,57 @@ clock = pygame.time.Clock()
 
 v, angle = 0, 0
 wind = -2
+grav=-9.8
 weight = 5
-velocity = 10
+velocity = 100
 radius = 20
 floor_limit = size[1]
 origin_x, origin_y = 10, floor_limit - 2*radius
 
+font = pygame.font.Font(size=4)
+
 V = lambda t, vx, vy, x, y: (x + vx*t, y - vy*t + 4.9*t**2, 3*t, vy-9.8*t, t+0.1)
 
 class Bull():
-    def __init__(self, v=20, x=origin_x, y=origin_y, angle=70, radius=radius, weight=1):
+    def __init__(self, v=20, x=origin_x, y=origin_y, angle=70, radius=radius, weight=1, air=False, grav=9.8):
         self.x = x
         self.y = y
-        self.vx = v * cos(angle)
-        self.vy = v * sin(angle)
         self.angle = angle
         self.t = 0.0
         self.radius = radius
         self.weight = weight
-        self.A = (self.radius**2) * math.pi
+        self.W = self.weight * grav * 0.1
+        self.air=air
+        self.vx = v * cos(angle) * 0.1
+        self.vy = v * sin(angle) * 0.1
+        self.color = "blue"
         # Calculamos la resistencia del aire
-        air = 1.225
-        air_resistance_x = float(0.5 * 0.47 * air * (self.vx ** 2) * self.A)
-        air_resistance_y = float(0.5 * 0.47 * air * (self.vy ** 2) * self.A)
+        if air:
+            self.color = "red"
+            _v = pygame.math.Vector2(0,v)
+            C_esfera = 0.47
+            p_air = 1.225 * 0.1**4 # g/cm^3  # 1 pixels = 0.1 m
+            A = radius**2 * math.pi
+            self.air_resistance = 0.5 * C_esfera * p_air * A * pygame.math.Vector2.magnitude(_v) * pygame.math.Vector2.normalize(_v)
 
-        # Aplica la resistencia del aire
-        # F/m
-        #print(air_resistance_x, air_resistance_y)
-        self.ax = -air_resistance_x / self.weight
-        self.ay = air_resistance_y / self.weight + 9.8
-        #print(self.ax, self.ay,"\n")
-    def show(self, screen):
-        self.x = int(self.x + self.vx * self.t)# + 0.5*self.ax*self.t**2)
-        self.y = int(self.y - self.vy * self.t + 0.5*self.ay*self.t**2)
-        self.t += 0.0005
-        pygame.draw.circle(screen, "blue", pygame.math.Vector2(self.x, self.y), self.radius)
+    def show(self, screen, floor_limit):
+        if self.y+self.radius*2 < floor_limit:
+            if self.air:
+                self.W = self.W + self.air_resistance.y
+                self.air = False
 
+            self.vy = self.vy - self.W * self.t
+
+            self.x = self.x + self.vx * self.t
+            #self.y = int(self.y - self.vy * self.t + 0.5*self.W*self.t**2)
+            self.y = self.y - self.vy*self.t
+            self.t += 0.05
+
+        pygame.draw.circle(screen, self.color, pygame.math.Vector2(self.x, self.y), self.radius)
+
+        if self.y+self.radius*2 >= floor_limit:
+            text = font.render(f"x={round(self.x*0.1,2)}", True, "black")
+            screen.blit(text, [self.x-self.radius/2, self.y-self.radius/2])
 
 
 class Particle:
@@ -72,9 +87,10 @@ class Particle:
 
 particles = []
 
-bulls = []  # [Bull(v=20,angle=80)]
+bulls = []
 direction = False
-
+grav_l = False
+grav_r = False
 
 rect_width = 100
 rect_height = 60
@@ -102,8 +118,10 @@ def draw_rotated_rect(angle):
     x4_new = rect_x + math.cos(angle_rad) * (x4 - rect_x) - math.sin(angle_rad) * (y4 - rect_y)
     y4_new = rect_y - math.sin(angle_rad) * (x4 - rect_x) - math.cos(angle_rad) * (y4 - rect_y)
 
-    pygame.draw.polygon(screen, [0, 0, 0], [(x1_new, y1_new), (x2_new, y2_new), (x3_new, y3_new), (x4_new, y4_new)])
 
+    pygame.draw.polygon(screen, [0, 0, 0], [(x1_new, y1_new), (x2_new, y2_new), (x3_new, y3_new), (x4_new, y4_new)])
+    text = font.render(f"{angle}°", True, "white")
+    screen.blit(text, [x2_new, y2_new])
 
 font = pygame.font.Font('freesansbold.ttf', 32)
 
@@ -117,24 +135,31 @@ while done:
             if event.key == K_SPACE:
                 direction = True
             if event.key == K_UP:
-                velocity += 1
+                velocity += 5
             if event.key == K_DOWN:
-                velocity -= 1
+                velocity -= 5
             if event.key == K_RIGHT:
-                wind += 1
+                grav_r = True
             if event.key == K_LEFT:
-                wind -= 1
+                grav_l = True                
             if event.key == K_w:
                 weight += 1
             if event.key == K_s:
                 weight -= 1
+            if event.key == K_c:
+                bulls = []           
         if event.type == KEYUP:
             if event.key == K_SPACE:
                 direction = False
                 x = rect_x + cos(v) * (x3 - rect_x) - sin(v) * (y3 - rect_y)
                 y = rect_y - sin(v) * (x3 - rect_x)
-                bulls.append(Bull(angle=angle, x=x, y=y, weight=weight*100, v=velocity*100))
-                angle = 1
+                bulls.append(Bull(angle=angle, x=x, y=y, weight=weight, v=velocity, grav=-grav))
+                bulls.append(Bull(angle=angle, x=x, y=y, weight=weight, v=velocity, air=True, grav=-grav))
+                angle = 0
+            if event.key == K_RIGHT:
+                grav_r = False           
+            if event.key == K_LEFT:
+                grav_l = False
 
     screen.fill("skyblue")
 
@@ -149,22 +174,22 @@ while done:
             aux.append(particles[i])
     particles = aux.copy()
 
-    text = font.render(f"V={velocity} m/s  Wind={wind}m/s² Weight={weight}kg", True, "black")
+    text = font.render(f"V={velocity* 0.1} m/s  g={round(grav,2)}m/s² Weight={weight}kg", True, "black")
     screen.blit(text, [10, 10])
     pygame.draw.line(screen, (60, 179, 113), [0, floor_limit], [size[0], floor_limit], 50)
 
     if direction:
         angle += 1
         v = angle
+    if grav_r:
+        grav += 0.1
+    if grav_l:
+        grav -= 0.1
 
     draw_rotated_rect(v)
 
-    aux = []
     for i in range(len(bulls)):
-        if bulls[i].x > 0 and bulls[i].y<floor_limit:
-            bulls[i].show(screen)
-            aux.append(bulls[i])
-    bulls = aux.copy()
+        bulls[i].show(screen, floor_limit)
 
     pygame.display.flip()
 
